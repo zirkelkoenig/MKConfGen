@@ -7,8 +7,8 @@ void _MkConfGenAddError(MkConfGenLoadError ** errorsPtr, unsigned long * errorCo
     _MKCONFGEN_ASSERT(errorCountPtr);
 
     if ((*errorCountPtr) % _MKCONFGEN_ERRORS_GROW_COUNT == 0) {
-        (*errorCountPtr) += _MKCONFGEN_ERRORS_GROW_COUNT;
-        *errorsPtr = (MkConfGenLoadError *)realloc(*errorsPtr, (*errorCountPtr) * sizeof(MkConfGenLoadError));
+        unsigned long allocCount = *errorCountPtr + _MKCONFGEN_ERRORS_GROW_COUNT;
+        *errorsPtr = (MkConfGenLoadError *)realloc(*errorsPtr, allocCount * sizeof(MkConfGenLoadError));
         _MKCONFGEN_ASSERT(*errorsPtr);
     }
 
@@ -81,7 +81,7 @@ void _MkConfGenLoad(
 
         // Skip Whitespace and Newlines
 
-        while (nextWc == L' ' || nextWc == L'\t') {
+        while (nextWc == L' ' || nextWc == L'\t' || nextWc == L'\n' || nextWc == L'\r') {
             if (!nextCallback(stream, &nextWc, stopStatus)) return;
 
             if (nextWc == L'\n') {
@@ -233,7 +233,7 @@ void _MkConfGenLoad(
             }
 
             end = !nextCallback(stream, &nextWc, stopStatus);
-            valueIsStr = false;
+            valueIsStr = true;
         } else {
             // Read Raw Number Value
 

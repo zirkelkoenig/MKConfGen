@@ -1339,7 +1339,7 @@ int wmain(int argCount, wchar_t ** args) {
                         OutputWcs(L"\n                return false;");
                         OutputWcs(L"\n            }");
 
-                        OutputWcs(L"\n            if (rawValueLength > ");
+                        OutputWcs(L"\n            if (rawValueLength >= ");
                         OutputWstr(itemPtr->length);
                         OutputWcs(L") { ");
 

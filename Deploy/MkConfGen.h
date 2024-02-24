@@ -79,7 +79,7 @@ typedef bool (*_MkConfGenParseValueCallback)(
     MkConfGenLoadErrorType * errorType);
 
 static bool _MkConfGenWcIsAsciiLetter(wchar_t wc) {
-    return (wc >= L'A' && wc <= L'Z') || (wc >= L'a' || wc <= L'z');
+    return (wc >= L'A' && wc <= L'Z') || (wc >= L'a' && wc <= L'z');
 }
 
 void _MkConfGenAddError(MkConfGenLoadError ** errorsPtr, unsigned long * errorCountPtr, MkConfGenLoadErrorType type, unsigned long line);
