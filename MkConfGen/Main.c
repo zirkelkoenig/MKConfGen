@@ -379,8 +379,10 @@ int wmain(int argCount, wchar_t ** args) {
     }
 
     MkList configs;
-    ulong inputHeadLength;
+    ulong inputHeadStart, inputHeadLength;
     {
+        inputHeadStart = MkWstrFindSubstrIndexWc(inputFileContent, L"\n");
+
         inputHeadLength = MkWstrFindSubstrIndexWc(inputFileContent, fullTokenFileBegin);
         if (inputHeadLength == ULONG_MAX) {
             return 3;
@@ -839,10 +841,14 @@ int wmain(int argCount, wchar_t ** args) {
         }
     }
 
-    wchar_t headerFilePath[MAX_PATH];
+    wchar_t headerFileName[MAX_PATH];
     {
-        wcsncpy_s(headerFilePath, MAX_PATH, fileName, fileBaseNameLength);
-        wcscat_s(headerFilePath, MAX_PATH, L"Gen.h");
+        wcsncpy_s(headerFileName, MAX_PATH, fileName, fileBaseNameLength);
+        wcscat_s(headerFileName, MAX_PATH, L"Gen.h");
+
+        wchar_t headerFilePath[MAX_PATH];
+        wcsncpy_s(headerFilePath, MAX_PATH, args[1], fileName - args[1]);
+        wcscat_s(headerFilePath, MAX_PATH, headerFileName);
 
         HANDLE file = CreateFileW(
             headerFilePath,
@@ -874,8 +880,8 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(fileBaseNameUpper);
         OutputWcs(L"_H\n");
 
-        OutputWcs(L"\n#include <wchar.h>");
-        OutputWcs(L"\n#include \"MkConfGen.h\"");
+        OutputWcs(L"\n#include <wchar.h>\n");
+        WriteUtf8Wcsn(file, inputFileContent->wcs, inputHeadStart);
 
         for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = MkListGet(&configs, i);
@@ -1033,12 +1039,13 @@ int wmain(int argCount, wchar_t ** args) {
     }
 
     {
-        wchar_t outputTest[MAX_PATH];
-        wcsncpy_s(outputTest, MAX_PATH, fileName, fileBaseNameLength);
-        wcscat_s(outputTest, MAX_PATH, L"Gen.cpp");
+        wchar_t implFilePath[MAX_PATH];
+        wcsncpy_s(implFilePath, MAX_PATH, args[1], fileName - args[1]);
+        wcsncat_s(implFilePath, MAX_PATH, fileName, fileBaseNameLength);
+        wcscat_s(implFilePath, MAX_PATH, L"Gen.cpp");
 
         HANDLE file = CreateFileW(
-            outputTest,
+            implFilePath,
             GENERIC_WRITE,
             0,
             NULL,
@@ -1054,7 +1061,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"//---------------------//\n\n");
 
         OutputWcs(L"#include \"");
-        OutputWcs(headerFilePath);
+        OutputWcs(headerFileName);
         OutputWcs(L"\"");
 
         OutputWcs(L"\n");
@@ -1062,7 +1069,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n// Copied Input File Head");
         
         OutputWcs(L"\n\n");
-        WriteUtf8Wcsn(file, inputFileContent->wcs, inputHeadLength);
+        WriteUtf8Wcsn(file, inputFileContent->wcs + inputHeadStart, inputHeadLength - inputHeadStart);
 
         OutputWcs(L"\n");
         OutputWcs(L"\n//-----");

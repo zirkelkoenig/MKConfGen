@@ -34,6 +34,8 @@ static void MkWstrRefInit(MkWstr * wstrPtr, ulong length, const wchar_t * wcs) {
 
 ulong MkWstrFindSubstrIndexWc(const MkWstr * wstr, const wchar_t * substrWc);
 
+ulong MkWstrFindSubstrIndexWcNoCase(const MkWstr * wstr, const wchar_t * substrWc);
+
 ulong MkWstrFindCharsNextIndex(const MkWstr * wstr, ulong startIndex, const wchar_t wcs[], ulong wcsCount);
 
 BOOL MkWstrIsPrefixWc(const MkWstr * wstr, ulong startIndex, const wchar_t * prefixWc);

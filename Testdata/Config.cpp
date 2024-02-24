@@ -1,4 +1,4 @@
-#include "MkConfGen.h"
+#include "Import/MkConfGen.h"
 
 static bool ValidateFontSize(int value) {
     return value > 0;

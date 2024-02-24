@@ -2,3 +2,6 @@
 *.user
 
 [Xx]64/
+
+Testdata/*Gen.cpp
+Testdata/*Gen.h

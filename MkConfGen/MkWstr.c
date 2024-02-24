@@ -56,6 +56,35 @@ ulong MkWstrFindSubstrIndexWc(const MkWstr * wstr, const wchar_t * substrWc) {
     return ULONG_MAX;
 }
 
+ulong MkWstrFindSubstrIndexWcNoCase(const MkWstr * wstr, const wchar_t * substrWc) {
+    assert(wstr);
+    assert(substrWc);
+
+    size_t substrLength = wcslen(substrWc);
+    if (substrLength == 0) {
+        return 0;
+    }
+    if (substrLength > wstr->length) {
+        return ULONG_MAX;
+    }
+    ulong end = wstr->length - substrLength + 1;
+    for (ulong i = 0; i != end; i++) {
+        BOOL match = TRUE;
+        for (ulong j = 0; j != substrLength; j++) {
+            wchar_t upperA = towupper(wstr->wcs[i + j]);
+            wchar_t upperB = towupper(substrWc[j]);
+            if (upperA != upperB) {
+                match = FALSE;
+                break;
+            }
+        }
+        if (match) {
+            return i;
+        }
+    }
+    return ULONG_MAX;
+}
+
 ulong MkWstrFindCharsNextIndex(const MkWstr * wstr, ulong startIndex, const wchar_t wcs[], ulong wcsCount) {
     assert(wstr);
     assert(startIndex < wstr->length);
