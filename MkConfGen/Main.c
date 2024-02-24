@@ -1441,7 +1441,7 @@ int wmain(int argCount, wchar_t ** args) {
         if (headingIndex != configPtr->headings.count) {
             headingPtr = MkListGet(&configPtr->headings, headingIndex);
             if (headingPtr->index == 0) {
-                OutputWcs(L"// ");
+                OutputWcs(L"# ");
                 OutputWstr(headingPtr->name);
 
                 if (++headingIndex != configPtr->headings.count) {
@@ -1456,7 +1456,7 @@ int wmain(int argCount, wchar_t ** args) {
 
         for (int j = 0; j != configPtr->items.count; j++) {
             if (headingPtr != NULL && headingPtr->index == j) {
-                OutputWcs(L"\n\n// ");
+                OutputWcs(L"\n\n# ");
                 OutputWstr(headingPtr->name);
 
                 if (++headingIndex != configPtr->headings.count) {
