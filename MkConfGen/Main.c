@@ -1338,7 +1338,7 @@ int wmain(int argCount, wchar_t ** args) {
                         OutputWcs(L"\n                *errorType = MKCONFGEN_LOAD_ERROR_VALUE_TYPE;");
                         OutputWcs(L"\n                return false;");
                         OutputWcs(L"\n            }");
-                        
+
                         OutputWcs(L"\n            if (rawValueLength > ");
                         OutputWstr(itemPtr->length);
                         OutputWcs(L") { ");
@@ -1411,6 +1411,72 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWcs(L"\n        errorCount);");
 
             OutputWcs(L"\n}");
+        }
+
+        CloseHandle(file);
+    }
+
+    for (int i = 0; i != configs.count; i++) {
+        Config * configPtr = MkListGet(&configs, i);
+
+        wchar_t filePath[MAX_PATH];
+        wcsncpy_s(filePath, MAX_PATH, args[1], fileName - args[1]);
+        wcsncat_s(filePath, MAX_PATH, configPtr->name.wcs, configPtr->name.length);
+        wcscat_s(filePath, MAX_PATH, L"_example.cfg");
+
+        HANDLE file = CreateFileW(
+            filePath,
+            GENERIC_WRITE,
+            0,
+            NULL,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+        if (file == INVALID_HANDLE_VALUE) {
+            return 4;
+        }
+
+        ulong headingIndex = 0;
+        Heading * headingPtr;
+        if (headingIndex != configPtr->headings.count) {
+            headingPtr = MkListGet(&configPtr->headings, headingIndex);
+            if (headingPtr->index == 0) {
+                OutputWcs(L"// ");
+                OutputWstr(headingPtr->name);
+
+                if (++headingIndex != configPtr->headings.count) {
+                    headingPtr = MkListGet(&configPtr->headings, headingIndex);
+                } else {
+                    headingPtr = NULL;
+                }
+            }
+        } else {
+            headingPtr = NULL;
+        }
+
+        for (int j = 0; j != configPtr->items.count; j++) {
+            if (headingPtr != NULL && headingPtr->index == j) {
+                OutputWcs(L"\n\n// ");
+                OutputWstr(headingPtr->name);
+
+                if (++headingIndex != configPtr->headings.count) {
+                    headingPtr = MkListGet(&configPtr->headings, headingIndex);
+                } else {
+                    headingPtr = NULL;
+                }
+            }
+
+            Item * itemPtr = MkListGet(&configPtr->items, j);
+            OutputWcs(L"\n");
+            OutputWstr(itemPtr->name);
+            OutputWcs(L" = ");
+            if (itemPtr->type == ITEM_WSTR) {
+                OutputWcs(L"\"");
+            }
+            OutputWstr(itemPtr->defaultValue);
+            if (itemPtr->type == ITEM_WSTR) {
+                OutputWcs(L"\"");
+            }
         }
 
         CloseHandle(file);
