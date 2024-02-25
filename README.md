@@ -12,6 +12,10 @@ Because this is just a side-project for use in my other projects, it's somewhat 
 
 I haven't added support for floating point items yet.
 
+# How to build
+
+The main code uses libraries from my `MKlib` repo. Download these and put them into the subfolder `Import`.
+
 # How to use
 
 1. Add the header/implementation pair from the `Deploy` folder into your project.

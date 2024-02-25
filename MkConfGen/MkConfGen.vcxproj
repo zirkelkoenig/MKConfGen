@@ -127,13 +127,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Main.c" />
-    <ClCompile Include="MkList.c" />
-    <ClCompile Include="MkWstr.c" />
+    <ClCompile Include="Import\MkList.cpp" />
+    <ClCompile Include="Import\MkString.cpp" />
+    <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="MkList.h" />
-    <ClInclude Include="MkWStr.h" />
+    <ClInclude Include="Import\MkList.h" />
+    <ClInclude Include="Import\MkString.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

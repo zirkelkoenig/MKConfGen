@@ -1,12 +1,25 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="Main.c" />
-    <ClCompile Include="MkWstr.c" />
-    <ClCompile Include="MkList.c" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Import\MkList.cpp">
+      <Filter>Import</Filter>
+    </ClCompile>
+    <ClCompile Include="Import\MkString.cpp">
+      <Filter>Import</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="MkWStr.h" />
-    <ClInclude Include="MkList.h" />
+    <ClInclude Include="Import\MkList.h">
+      <Filter>Import</Filter>
+    </ClInclude>
+    <ClInclude Include="Import\MkString.h">
+      <Filter>Import</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Import">
+      <UniqueIdentifier>{ff739ec6-19e7-4584-8548-2483def91dab}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

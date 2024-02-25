@@ -5,3 +5,5 @@
 
 Testdata/*Gen.cpp
 Testdata/*Gen.h
+
+MkConfGen/Import/
