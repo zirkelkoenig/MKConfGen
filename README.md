@@ -31,7 +31,6 @@ The main code uses libraries from my `MKlib` repo. Download these and put them i
    - structs for the actual config values
    - `Init` functions that initialize a config struct with default values
    - `Load` functions to read values from a config file
-7. To use the `Load` function, you have to provide a callback function that reads the next character from a given stream.
 
 # Definition File
 
