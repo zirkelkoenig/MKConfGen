@@ -48,10 +48,6 @@
 #define MK_CONF_MAX_KEY_COUNT 64
 #define MK_CONF_MAX_VALUE_COUNT 512
 
-// Reads the next character from a given stream.
-// Returns FALSE if the read fails and sets the status pointer.
-typedef bool (*MkConfGenStreamNextCallback)(void * stream, wchar_t * wc, void ** stopStatus);
-
 typedef enum MkConfGenLoadErrorType {
     MKCONFGEN_LOAD_ERROR_UNDEFINED,
     MKCONFGEN_LOAD_ERROR_KEY_FORMAT, // The key is malformed.
@@ -78,18 +74,9 @@ typedef bool (*_MkConfGenParseValueCallback)(
     bool isStr,
     MkConfGenLoadErrorType * errorType);
 
-static bool _MkConfGenWcIsAsciiLetter(wchar_t wc) {
-    return (wc >= L'A' && wc <= L'Z') || (wc >= L'a' && wc <= L'z');
-}
-
-void _MkConfGenAddError(MkConfGenLoadError ** errorsPtr, unsigned long * errorCountPtr, MkConfGenLoadErrorType type, unsigned long line);
-
-bool _MkConfGenSkipLine(MkConfGenStreamNextCallback nextCallback, void * stream, wchar_t * nextWc, void ** stopStatus);
-
-void _MkConfGenLoad(
-    MkConfGenStreamNextCallback nextCallback,
-    void * stream,
-    void ** stopStatus,
+bool _MkConfGenLoad(
+    const wchar_t * configWcs,
+    unsigned long configLength,
     unsigned long keyCount,
     const unsigned long * keyIndices,
     const wchar_t * keys,

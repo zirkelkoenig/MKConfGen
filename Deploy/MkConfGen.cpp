@@ -2,46 +2,9 @@
 
 #define _MKCONFGEN_ERRORS_GROW_COUNT 8
 
-void _MkConfGenAddError(MkConfGenLoadError ** errorsPtr, unsigned long * errorCountPtr, MkConfGenLoadErrorType type, unsigned long line) {
-    _MKCONFGEN_ASSERT(errorsPtr);
-    _MKCONFGEN_ASSERT(errorCountPtr);
-
-    if ((*errorCountPtr) % _MKCONFGEN_ERRORS_GROW_COUNT == 0) {
-        unsigned long allocCount = *errorCountPtr + _MKCONFGEN_ERRORS_GROW_COUNT;
-        *errorsPtr = (MkConfGenLoadError *)realloc(*errorsPtr, allocCount * sizeof(MkConfGenLoadError));
-        _MKCONFGEN_ASSERT(*errorsPtr);
-    }
-
-    MkConfGenLoadError * errorPtr = &(*errorsPtr)[(*errorCountPtr)++];
-    errorPtr->type = type;
-    errorPtr->line = line;
-}
-
-bool _MkConfGenSkipLine(MkConfGenStreamNextCallback nextCallback, void * stream, wchar_t * nextWc, void ** stopStatus) {
-    _MKCONFGEN_ASSERT(nextCallback);
-    _MKCONFGEN_ASSERT(stream);
-    _MKCONFGEN_ASSERT(nextWc);
-    _MKCONFGEN_ASSERT(stopStatus);
-
-    while (*nextWc != L'\n' && *nextWc != L'\r') {
-        if (!nextCallback(stream, nextWc, stopStatus)) return false;
-    }
-    if (*nextWc == L'\n') {
-        return nextCallback(stream, nextWc, stopStatus);
-    } else {
-        if (!nextCallback(stream, nextWc, stopStatus)) return false;
-        if (*nextWc == L'\n') {
-            return nextCallback(stream, nextWc, stopStatus);
-        } else {
-            return true;
-        }
-    }
-}
-
-void _MkConfGenLoad(
-    MkConfGenStreamNextCallback nextCallback,
-    void * stream,
-    void ** stopStatus,
+bool _MkConfGenLoad(
+    const wchar_t * configWcs,
+    unsigned long configLength,
     unsigned long keyCount,
     const unsigned long * keyIndices,
     const wchar_t * keys,
@@ -50,9 +13,7 @@ void _MkConfGenLoad(
     MkConfGenLoadError ** errors,
     unsigned long * errorCount)
 {
-    _MKCONFGEN_ASSERT(nextCallback);
-    _MKCONFGEN_ASSERT(stream);
-    _MKCONFGEN_ASSERT(stopStatus);
+    _MKCONFGEN_ASSERT(configWcs || configLength == 0);
     _MKCONFGEN_ASSERT(keyIndices);
     _MKCONFGEN_ASSERT(parseValueCallback);
     _MKCONFGEN_ASSERT(keys);
@@ -62,8 +23,8 @@ void _MkConfGenLoad(
 
     *errorCount = 0;
     *errors = NULL;
+    bool memoryError = false;
 
-    wchar_t nextWc = L' ';
     unsigned long currentLine = 0;
     bool skipLine;
 
@@ -73,36 +34,58 @@ void _MkConfGenLoad(
     unsigned long currentRawValueLength;
     bool valueIsStr;
 
-    bool end = false;
-    while (!end) {
+    unsigned long i = 0;
+
+    auto SkipLine = [&configWcs, &configLength, &i]() {
+        while (configWcs[i] != L'\n') {
+            if (++i == configLength) return false;
+        }
+        return ++i != configLength;
+    };
+
+    auto IsAsciiLetter = [&configWcs, &i]() {
+        return (configWcs[i] >= L'A' && configWcs[i] <= L'Z') || (configWcs[i] >= L'a' && configWcs[i] <= L'z');
+    };
+
+    auto AddError = [&errors, &errorCount, &currentLine, &memoryError](MkConfGenLoadErrorType type) {
+        if ((*errorCount) % _MKCONFGEN_ERRORS_GROW_COUNT == 0) {
+            unsigned long allocCount = *errorCount + _MKCONFGEN_ERRORS_GROW_COUNT;
+            MkConfGenLoadError * newErrors = (MkConfGenLoadError *)realloc(*errors, allocCount * sizeof(MkConfGenLoadError));
+            if (!newErrors) {
+                memoryError = true;
+                return;
+            }
+            *errors = newErrors;
+            _MKCONFGEN_ASSERT(*errors);
+        }
+
+        MkConfGenLoadError * errorPtr = &(*errors)[(*errorCount)++];
+        errorPtr->type = type;
+        errorPtr->line = currentLine;
+    };
+
+    while (i != configLength) {
         skipLine = false;
         currentKeyLength = 0;
         currentRawValueLength = 0;
 
         // Skip Whitespace and Newlines
 
-        while (nextWc == L' ' || nextWc == L'\t' || nextWc == L'\n' || nextWc == L'\r') {
-            if (!nextCallback(stream, &nextWc, stopStatus)) return;
-
-            if (nextWc == L'\n') {
-                if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                currentLine++;
-            } else if (nextWc == L'\r') {
-                if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                if (nextWc == L'\n') {
-                    if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                }
+        while (configWcs[i] == L' ' || configWcs[i] == L'\t' || configWcs[i] == L'\n') {
+            if (++i == configLength) return memoryError;
+            if (configWcs[i] == L'\n') {
+                if (++i == configLength) return memoryError;
                 currentLine++;
             }
         }
 
         // Check First Key Char
 
-        if (!(_MkConfGenWcIsAsciiLetter(nextWc) || nextWc == L'_')) {
-            if (nextWc != L'#') {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_KEY_FORMAT, currentLine);
+        if (!(IsAsciiLetter() || configWcs[i] == L'_')) {
+            if (configWcs[i] != L'#') {
+                AddError(MKCONFGEN_LOAD_ERROR_KEY_FORMAT);
             }
-            if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
+            if (!SkipLine()) return memoryError;
             currentLine++;
             continue;
         }
@@ -111,50 +94,45 @@ void _MkConfGenLoad(
 
         do {
             if (currentKeyLength == MK_CONF_MAX_KEY_COUNT - 1) {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_KEY_LENGTH, currentLine);
-                if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
+                AddError(MKCONFGEN_LOAD_ERROR_KEY_LENGTH);
+                if (!SkipLine()) return memoryError;
                 currentLine++;
                 skipLine = false;
                 break;
             }
-            currentKey[currentKeyLength++] = nextWc;
+            currentKey[currentKeyLength++] = configWcs[i];
 
-            if (!nextCallback(stream, &nextWc, stopStatus)) {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_NO_VALUE, currentLine);
-                return;
+            if (++i == configLength) {
+                AddError(MKCONFGEN_LOAD_ERROR_NO_VALUE);
+                return memoryError;
             }
-        } while (_MkConfGenWcIsAsciiLetter(nextWc) || iswdigit(nextWc) || nextWc == L'_');
+        } while (IsAsciiLetter() || iswdigit(configWcs[i]) || configWcs[i] == L'_');
         if (skipLine) {
             continue;
         }
 
         // Skip Whitespace
 
-        while (nextWc == L' ' || nextWc == L'\t') {
-            if (!nextCallback(stream, &nextWc, stopStatus)) {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_NO_VALUE, currentLine);
-                return;
+        while (configWcs[i] == L' ' || configWcs[i] == L'\t') {
+            if (++i == configLength) {
+                AddError(MKCONFGEN_LOAD_ERROR_NO_VALUE);
+                return memoryError;
             }
         }
 
         // Check Equal Sign
 
-        if (nextWc != L'=') {
-            if (nextWc == L'#' || nextWc == L'\n' || nextWc == L'\r') {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_NO_VALUE, currentLine);
-                if (nextWc == L'#') {
-                    if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
-                } else if (nextWc == L'\n') {
-                    if (!nextCallback(stream, &nextWc, stopStatus)) return;
+        if (configWcs[i] != L'=') {
+            if (configWcs[i] == L'#' || configWcs[i] == L'\n') {
+                AddError(MKCONFGEN_LOAD_ERROR_NO_VALUE);
+                if (configWcs[i] == L'#') {
+                    if (!SkipLine()) return memoryError;
                 } else {
-                    if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                    if (nextWc == L'\n') {
-                        if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                    }
+                    if (++i == configLength) return memoryError;
                 }
             } else {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_KEY_FORMAT, currentLine);
-                if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
+                AddError(MKCONFGEN_LOAD_ERROR_KEY_FORMAT);
+                if (!SkipLine()) return memoryError;
             }
             currentLine++;
             break;
@@ -163,91 +141,81 @@ void _MkConfGenLoad(
         // Skip Whitespace
 
         do {
-            if (!nextCallback(stream, &nextWc, stopStatus)) {
-                _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_NO_VALUE, currentLine);
-                return;
+            if (++i == configLength) {
+                AddError(MKCONFGEN_LOAD_ERROR_NO_VALUE);
+                return memoryError;
             }
-        } while (nextWc == L' ' || nextWc == L'\t');
+        } while (configWcs[i] == L' ' || configWcs[i] == L'\t');
 
         // Check First Value Char
 
-        if (nextWc == L'#' || nextWc == L'\n' || nextWc == L'\r') {
-            _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_NO_VALUE, currentLine);
-            if (nextWc == L'#') {
-                if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
-            } else if (nextWc == L'\n') {
-                if (!nextCallback(stream, &nextWc, stopStatus)) return;
+        if (configWcs[i] == L'#' || configWcs[i] == L'\n') {
+            AddError(MKCONFGEN_LOAD_ERROR_NO_VALUE);
+            if (configWcs[i] == L'#') {
+                if (!SkipLine()) return memoryError;
             } else {
-                if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                if (nextWc == L'\n') {
-                    if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                }
+                if (++i == configLength) return memoryError;
             }
             currentLine++;
             break;
         }
 
-        if (nextWc == L'\"') {
+        if (configWcs[i] == L'\"') {
             // Read Raw String Value
 
-            do {
-                if (!nextCallback(stream, &nextWc, stopStatus)) {
-                    _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_VALUE_FORMAT, currentLine);
-                    return;
+            while (true) {
+                if (++i == configLength) {
+                    AddError(MKCONFGEN_LOAD_ERROR_VALUE_FORMAT);
+                    return memoryError;
                 }
 
-                if (nextWc == L'\n' || nextWc == L'\r') {
-                    _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_VALUE_FORMAT, currentLine);
-                    if (nextWc == L'\n') {
-                        if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                    } else {
-                        if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                        if (nextWc == L'\n') {
-                            if (!nextCallback(stream, &nextWc, stopStatus)) return;
-                        }
-                    }
+                if (configWcs[i] == L'\n') {
+                    AddError(MKCONFGEN_LOAD_ERROR_VALUE_FORMAT);
+                    if (++i == configLength) return memoryError;
                     currentLine++;
                     skipLine = false;
                     break;
                 }
 
-                if (currentRawValueLength == 512 - 1) {
-                    _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_VALUE_LENGTH, currentLine);
-                    if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
-                    currentLine++;
-                    skipLine = false;
-                    break;
-                }
-
-                if (nextWc == L'\"') {
+                if (configWcs[i] == L'\"') {
                     if (currentRawValueLength != 0 && currentRawValue[currentRawValueLength - 1] == L'\\') {
                         currentRawValue[currentRawValueLength - 1] = L'\"';
-                        nextWc = L'\\';
+                        continue;
+                    } else {
+                        break;
                     }
-                } else {
-                    currentRawValue[currentRawValueLength++] = nextWc;
                 }
-            } while (nextWc != L'\"');
+
+                if (currentRawValueLength == MK_CONF_MAX_VALUE_COUNT - 1) {
+                    AddError(MKCONFGEN_LOAD_ERROR_VALUE_LENGTH);
+                    if (!SkipLine()) return memoryError;
+                    currentLine++;
+                    skipLine = false;
+                    break;
+                }
+
+                currentRawValue[currentRawValueLength++] = configWcs[i];
+            }
             if (skipLine) {
                 continue;
             }
 
-            end = !nextCallback(stream, &nextWc, stopStatus);
+            i++;
             valueIsStr = true;
         } else {
             // Read Raw Number Value
 
-            while (!(end || nextWc == L' ' || nextWc == L'\t' || nextWc == L'\n' || nextWc == '\r')) {
+            while (!(i == configLength || configWcs[i] == L' ' || configWcs[i] == L'\t' || configWcs[i] == L'\n')) {
                 if (currentRawValueLength == MK_CONF_MAX_VALUE_COUNT - 1) {
-                    _MkConfGenAddError(errors, errorCount, MKCONFGEN_LOAD_ERROR_VALUE_LENGTH, currentLine);
-                    if (!_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus)) return;
+                    AddError(MKCONFGEN_LOAD_ERROR_VALUE_LENGTH);
+                    if (!SkipLine()) return memoryError;
                     currentLine++;
                     skipLine = false;
                     break;
                 }
-                currentRawValue[currentRawValueLength++] = nextWc;
+                currentRawValue[currentRawValueLength++] = configWcs[i];
 
-                end = !nextCallback(stream, &nextWc, stopStatus);
+                i++;
             }
             if (skipLine) {
                 continue;
@@ -258,8 +226,8 @@ void _MkConfGenLoad(
 
         // Discard Remainder
 
-        if (!end) {
-            end = !_MkConfGenSkipLine(nextCallback, stream, &nextWc, stopStatus);
+        if (i != configLength) {
+            SkipLine();
         }
 
         // Parse
@@ -267,23 +235,25 @@ void _MkConfGenLoad(
         currentKey[currentKeyLength] = L'\0';
         currentRawValue[currentRawValueLength] = L'\0';
 
-        unsigned long i;
-        for (i = 0; i != keyCount; i++) {
-            unsigned long index = keyIndices[i];
-            unsigned long length = (unsigned long)(keyIndices[i + 1] - index);
+        unsigned long j;
+        for (j = 0; j != keyCount; j++) {
+            unsigned long index = keyIndices[j];
+            unsigned long length = (unsigned long)(keyIndices[j + 1] - index);
             if (wcsncmp(currentKey, keys + index, length) == 0) {
                 break;
             }
         }
-        if (i == keyCount) {
+        if (j == keyCount) {
             continue;
         }
 
         MkConfGenLoadErrorType parseErrorType;
-        if (!parseValueCallback(config, i, currentRawValue, currentRawValueLength, valueIsStr, &parseErrorType)) {
-            _MkConfGenAddError(errors, errorCount, parseErrorType, currentLine);
+        if (!parseValueCallback(config, j, currentRawValue, currentRawValueLength, valueIsStr, &parseErrorType)) {
+            AddError(parseErrorType);
         }
 
         currentLine++;
     }
+
+    return memoryError;
 }

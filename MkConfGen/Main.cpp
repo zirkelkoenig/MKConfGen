@@ -30,46 +30,35 @@ int ReadInputFile(wchar_t * filePath, MkList * inputListPtr) {
     if (file == INVALID_HANDLE_VALUE) {
         return 1;
     }
-    MkListInit(inputListPtr, 32, sizeof(wchar_t));
-
     LARGE_INTEGER fileSizeStruct;
     if (!GetFileSizeEx(file, &fileSizeStruct)) {
         return 1;
     }
-    if (!MkListSetCapacity(inputListPtr, fileSizeStruct.QuadPart)) {
+
+    byte * rawInput = (byte *)malloc(fileSizeStruct.QuadPart);
+    if (!rawInput) {
         return 2;
     }
 
-    auto readCallback = [](void * stream, ulong count, byte * buffer, void * status) {
-        ulong readCount;
-        BOOL result = ReadFile(
-            (HANDLE)stream,
-            buffer,
-            count,
-            &readCount,
-            nullptr);
-        if (result) {
-            if (readCount == 0) {
-                ulong * lastError = (ulong *)status;
-                *lastError = ERROR_HANDLE_EOF;
-                return false;
-            } else {
-                return true;
-            }
-        } else {
-            ulong * lastError = (ulong *)status;
-            *lastError = GetLastError();
-            return false;
-        }
-    };
-
-    ulong status;
-    MkReadUtf8Stream(readCallback, file, &status, MKUTF8_NO_OPTIONS, inputListPtr);
-    if (status != ERROR_HANDLE_EOF) {
+    ulong bytesRead;
+    bool success = ReadFile(
+        file,
+        rawInput,
+        (ulong)fileSizeStruct.QuadPart,
+        &bytesRead,
+        nullptr);
+    if (!success) {
         return 1;
     }
 
     CloseHandle(file);
+
+    MkListInit(inputListPtr, 16, sizeof(wchar_t));
+    success = MkReadUtf8Stream(rawInput, (ulong)fileSizeStruct.QuadPart, inputListPtr);
+    if (!success) {
+        return 2;
+    }
+
     return 0;
 }
 
@@ -155,7 +144,7 @@ const wchar_t sepChars[] = { L' ', L'\t', L'\n', L',' };
 #define CheckTruncation() if (inputWcs >= inputWcsEnd) return 3
 #define AdvanceAndCheck(n) inputWcs += (n); CheckTruncation()
 #define WcsLengthR(s) ((sizeof s / sizeof(wchar_t)) - 1)
-#define inputWcsLength (inputWcsEnd - inputWcs)
+#define inputWcsLength (ulong)(inputWcsEnd - inputWcs)
 
 // 0 - ok
 // 3 - syntax error
@@ -172,12 +161,12 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
     }
     inputWcs = inputHeadPtr->wcs + 1;
     CheckTruncation();
-    includeLinePtr->length = inputWcs - includeLinePtr->wcs;
+    includeLinePtr->length = (ulong)(inputWcs - includeLinePtr->wcs);
 
     // User Code
 
     inputHeadPtr->length = MkWcsFindSubstringIndex(inputWcs, inputWcsLength, fullTokenFileBegin);
-    if (inputHeadPtr->length == SIZE_MAX) {
+    if (inputHeadPtr->length == ULONG_MAX) {
         return 3;
     }
     AdvanceAndCheck(inputHeadPtr->length + WcsLengthR(fullTokenFileBegin));
@@ -226,7 +215,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                     AdvanceAndCheck(1);
                     parseState = PARSE_DEF_BEGIN_OPEN;
 
-                    configPtr = (Config *)MkListInsert(configsPtr, SIZE_MAX, 1);
+                    configPtr = (Config *)MkListInsert(configsPtr, ULONG_MAX, 1);
                     MkListInit(&configPtr->headings, 4, sizeof(Heading));
                     MkListInit(&configPtr->items, 16, sizeof(Item));
                 } else {
@@ -238,8 +227,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_DEF_BEGIN_OPEN:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
                 MkWstrSet(&configPtr->name, inputWcs, j);
@@ -314,11 +303,11 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_HEADING_OPEN:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
-                Heading * headingPtr = (Heading *)MkListInsert(&configPtr->headings, SIZE_MAX, 1);
+                Heading * headingPtr = (Heading *)MkListInsert(&configPtr->headings, ULONG_MAX, 1);
                 headingPtr->index = configPtr->items.count;
                 MkWstrSet(&headingPtr->name, inputWcs, j);
                 AdvanceAndCheck(j);
@@ -351,11 +340,11 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_INT_OPEN:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, SIZE_MAX, 1);
+                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
                 itemPtr->type = ITEM_INT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -378,8 +367,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_INT_SEP:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->defaultValue, inputWcs, j);
@@ -413,11 +402,11 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_UINT_OPEN:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, SIZE_MAX, 1);
+                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
                 itemPtr->type = ITEM_UINT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -440,8 +429,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_UINT_SEP:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->defaultValue, inputWcs, j);
@@ -475,11 +464,11 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_WSTR_OPEN:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, SIZE_MAX, 1);
+                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
                 itemPtr->type = ITEM_WSTR;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -502,8 +491,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_WSTR_NAME_SEP:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->length, inputWcs, j);
@@ -532,7 +521,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 }
                 AdvanceAndCheck(2);
 
-                size_t j = 0;
+                ulong j = 0;
                 while (!(inputWcs[j] == L'\"' && (j == 0 || inputWcs[j - 1] != L'\\'))) {
                     j++;
                 }
@@ -568,8 +557,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_VALIDATE_OPEN:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
                 MkWstrSet(&validateName, inputWcs, j);
@@ -592,8 +581,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             case PARSE_VALIDATE_SEP:
             {
                 ConsumeWhitespace();
-                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == SIZE_MAX) {
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == ULONG_MAX) {
                     return 3;
                 }
                 MkWstrSet(&validateCallback, inputWcs, j);
@@ -626,8 +615,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
     return 0;
 }
 
-#define OutputWcs(s) if (!MkWriteUtf8Stream(writeCallback, file, &status, MKUTF8_CRLF, (s), wcslen(s))) return 4
-#define OutputWstr(s) if (!MkWriteUtf8Stream(writeCallback, file, &status, MKUTF8_CRLF, (s)->wcs, (s)->length)) return 4
+#define OutputWcs(s) if (!MkWriteUtf8Stream(writeCallback, file, &status, (s), ULONG_MAX, true)) return 4
+#define OutputWstr(s) if (!MkWriteUtf8Stream(writeCallback, file, &status, (s)->wcs, (s)->length, true)) return 4
 
 // Errors:
 // 1 - file not readable
@@ -712,7 +701,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"//---------------------//\n\n");
 
         wchar_t fileBaseNameUpper[MAX_PATH];
-        for (size_t i = 0; i != fileBaseNameLength; i++) {
+        for (ulong i = 0; i != fileBaseNameLength; i++) {
             fileBaseNameUpper[i] = towupper(fileName[i]);
         }
         fileBaseNameUpper[fileBaseNameLength] = L'\0';
@@ -728,7 +717,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n#include <wchar.h>\n");
         OutputWstr(&includeLine);
 
-        for (size_t i = 0; i != configs.count; i++) {
+        for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = (Config *)MkListGet(&configs, i);
 
             OutputWcs(L"\n\nstruct ");
@@ -743,7 +732,7 @@ int wmain(int argCount, wchar_t ** args) {
                 headingPtr = NULL;
             }
 
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n    // ");
                     OutputWstr(&headingPtr->name);
@@ -793,7 +782,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//---------------");
         OutputWcs(L"\n// Default Values");
 
-        for (size_t i = 0; i != configs.count; i++) {
+        for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = (Config *)MkListGet(&configs, i);
 
             OutputWcs(L"\n\n// ");
@@ -807,7 +796,7 @@ int wmain(int argCount, wchar_t ** args) {
                 headingPtr = NULL;
             }
 
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n// ");
                     OutputWstr(&headingPtr->name);
@@ -854,7 +843,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//----------");
         OutputWcs(L"\n// Functions");
 
-        for (size_t i = 0; i != configs.count; i++) {
+        for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = (Config *)MkListGet(&configs, i);
 
             OutputWcs(L"\n\nvoid ");
@@ -863,19 +852,11 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWstr(&configPtr->name);
             OutputWcs(L" * configPtr);");
 
-            OutputWcs(L"\n\nvoid ");
+            OutputWcs(L"\n\nbool ");
             OutputWstr(&configPtr->name);
             OutputWcs(L"Load(");
-
-            OutputWcs(L"\n    ");
             OutputWstr(&configPtr->name);
-            OutputWcs(L" * configPtr,");
-
-            OutputWcs(L"\n    void * stream,");
-            OutputWcs(L"\n    MkConfGenStreamNextCallback nextCallback,");
-            OutputWcs(L"\n    void ** stopStatus,");
-            OutputWcs(L"\n    MkConfGenLoadError ** errors,");
-            OutputWcs(L"\n    unsigned long * errorCount);");
+            OutputWcs(L" * configPtr, const wchar_t * configWcs, unsigned long configLength, MkConfGenLoadError ** errors, unsigned long * errorCount);");
         }
 
         OutputWcs(L"\n\n#endif");
@@ -922,7 +903,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//-----");
         OutputWcs(L"\n// Keys");
 
-        for (size_t i = 0; i != configs.count; i++) {
+        for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = (Config *)MkListGet(&configs, i);
 
             OutputWcs(L"\n\nconst unsigned long _mkConfGen");
@@ -931,7 +912,7 @@ int wmain(int argCount, wchar_t ** args) {
 
             size_t currentKeyIndex = 0;
             wchar_t tmpBuffer[32];
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 swprintf_s(tmpBuffer, 32, L"\n    %zu,", currentKeyIndex);
                 OutputWcs(tmpBuffer);
 
@@ -946,7 +927,7 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWstr(&configPtr->name);
             OutputWcs(L"Keys[] =");
 
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
                 OutputWcs(L"\n    L\"");
                 OutputWstr(&itemPtr->name);
@@ -959,7 +940,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//---------------");
         OutputWcs(L"\n// Default Values");
 
-        for (size_t i = 0; i != configs.count; i++) {
+        for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = (Config *)MkListGet(&configs, i);
 
             OutputWcs(L"\n\n// ");
@@ -973,7 +954,7 @@ int wmain(int argCount, wchar_t ** args) {
                 headingPtr = NULL;
             }
 
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n// ");
                     OutputWstr(&headingPtr->name);
@@ -1024,7 +1005,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//----------");
         OutputWcs(L"\n// Functions");
 
-        for (size_t i = 0; i != configs.count; i++) {
+        for (ulong i = 0; i != configs.count; i++) {
             Config * configPtr = (Config *)MkListGet(&configs, i);
 
             OutputWcs(L"\n\nvoid ");
@@ -1042,7 +1023,7 @@ int wmain(int argCount, wchar_t ** args) {
                 headingPtr = NULL;
             }
 
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n    // ");
                     OutputWstr(&headingPtr->name);
@@ -1098,11 +1079,11 @@ int wmain(int argCount, wchar_t ** args) {
 
             OutputWcs(L"\n    switch (index) {");
 
-            for (size_t j = 0; j != configPtr->items.count; j++) {
+            for (ulong j = 0; j != configPtr->items.count; j++) {
                 Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
 
                 wchar_t tmpBuffer[64];
-                swprintf_s(tmpBuffer, 64, L"\n\n        case %zu:", j);
+                swprintf_s(tmpBuffer, 64, L"\n\n        case %lu:", j);
                 OutputWcs(tmpBuffer);
                 OutputWcs(L"\n        {");
 
@@ -1217,27 +1198,17 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWcs(L"\n    }");
             OutputWcs(L"\n}");
 
-            OutputWcs(L"\n\nvoid ");
+            OutputWcs(L"\n\nbool ");
             OutputWstr(&configPtr->name);
             OutputWcs(L"Load(");
-
-            OutputWcs(L"\n    ");
             OutputWstr(&configPtr->name);
-            OutputWcs(L" * configPtr,");
-
-            OutputWcs(L"\n    void * stream,");
-            OutputWcs(L"\n    MkConfGenStreamNextCallback nextCallback,");
-            OutputWcs(L"\n    void ** stopStatus,");
-            OutputWcs(L"\n    MkConfGenLoadError ** errors,");
-            OutputWcs(L"\n    unsigned long * errorCount)");
-            OutputWcs(L"\n{");
-            OutputWcs(L"\n    _MkConfGenLoad(");
-            OutputWcs(L"\n        nextCallback,");
-            OutputWcs(L"\n        stream,");
-            OutputWcs(L"\n        stopStatus,");
+            OutputWcs(L" * configPtr, const wchar_t * configWcs, unsigned long configLength, MkConfGenLoadError ** errors, unsigned long * errorCount) {");
+            OutputWcs(L"\n    return _MkConfGenLoad(");
+            OutputWcs(L"\n        configWcs,");
+            OutputWcs(L"\n        configLength,");
 
             wchar_t tmpBuffer[32];
-            swprintf_s(tmpBuffer, 32, L"\n        %zu,", configPtr->items.count);
+            swprintf_s(tmpBuffer, 32, L"\n        %lu,", configPtr->items.count);
             OutputWcs(tmpBuffer);
 
             OutputWcs(L"\n        _mkConfGen");
@@ -1263,7 +1234,7 @@ int wmain(int argCount, wchar_t ** args) {
         CloseHandle(file);
     }
 
-    for (size_t i = 0; i != configs.count; i++) {
+    for (ulong i = 0; i != configs.count; i++) {
         Config * configPtr = (Config *)MkListGet(&configs, i);
 
         wchar_t filePath[MAX_PATH];
@@ -1303,7 +1274,7 @@ int wmain(int argCount, wchar_t ** args) {
             headingPtr = NULL;
         }
 
-        for (size_t j = 0; j != configPtr->items.count; j++) {
+        for (ulong j = 0; j != configPtr->items.count; j++) {
             if (headingPtr != NULL && headingPtr->index == j) {
                 OutputWcs(L"\n\n# ");
                 OutputWstr(&headingPtr->name);
