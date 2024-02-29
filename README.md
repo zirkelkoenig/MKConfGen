@@ -10,8 +10,6 @@ The input file is expected to use UTF-8 encoding without BOM. Both LF and CR+LF 
 
 Because this is just a side-project for use in my other projects, it's somewhat rough because I just wanted it to work and didn't put much effort into nice error messages or code organization. Maybe later...
 
-I haven't added support for floating point items yet.
-
 # How to build
 
 The main code uses libraries from my `MKlib` repo. Download these and put them into the subfolder `Import`.
@@ -46,6 +44,7 @@ The following config item types can be defined:
 
 - `MKCONFGEN_ITEM_INT(<itemName>, <defaultValue>)` - long integer
 - `MKCONFGEN_ITEM_UINT(<itemName>, <defaultValue>)` - unsigned long integer
+- `MKCONFGEN_ITEM_FLOAT(<itemName>, <defaultValue>)` - double
 - `MKCONFGEN_ITEM_WSTR(<itemName>, <size>, <defaultValue>)`
   - wide string containing `<size> - 1` characters (NULL-terminator matters here)
   - `<defaultValue>` must be a wide string literal (which means `L"text"`)
