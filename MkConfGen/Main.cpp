@@ -71,6 +71,7 @@ enum ItemType {
     ITEM_NONE,
     ITEM_INT,
     ITEM_UINT,
+    ITEM_FLOAT,
     ITEM_WSTR,
 };
 
@@ -114,6 +115,11 @@ enum ParseState {
     PARSE_UINT_NAME,
     PARSE_UINT_SEP,
     PARSE_UINT_DEFAULT,
+    PARSE_FLOAT_KEYWORD,
+    PARSE_FLOAT_OPEN,
+    PARSE_FLOAT_NAME,
+    PARSE_FLOAT_SEP,
+    PARSE_FLOAT_DEFAULT,
     PARSE_VALIDATE_KEYWORD,
     PARSE_VALIDATE_OPEN,
     PARSE_VALIDATE_NAME,
@@ -136,6 +142,7 @@ const wchar_t tokenPrefixItem[] = L"ITEM_";
 const wchar_t tokenItemWstr[] = L"WSTR";
 const wchar_t tokenItemInt[] = L"INT";
 const wchar_t tokenItemUint[] = L"UINT";
+const wchar_t tokenItemFloat[] = L"FLOAT";
 
 const wchar_t closeChars[] = { L' ', L'\t', L'\n', L')' };
 const wchar_t sepChars[] = { L' ', L'\t', L'\n', L',' };
@@ -268,6 +275,9 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                     } else if (MkWcsIsPrefix(inputWcs, inputWcsLength, tokenItemUint)) {
                         AdvanceAndCheck(WcsLengthR(tokenItemUint));
                         parseState = PARSE_UINT_KEYWORD;
+                    } else if (MkWcsIsPrefix(inputWcs, inputWcsLength, tokenItemFloat)) {
+                        AdvanceAndCheck(WcsLengthR(tokenItemFloat));
+                        parseState = PARSE_FLOAT_KEYWORD;
                     } else if (MkWcsIsPrefix(inputWcs, inputWcsLength, tokenItemWstr)) {
                         AdvanceAndCheck(WcsLengthR(tokenItemWstr));
                         parseState = PARSE_WSTR_KEYWORD;
@@ -440,6 +450,68 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
             }
 
             case PARSE_UINT_DEFAULT:
+            {
+                ConsumeWhitespace();
+                if (*inputWcs != L')') {
+                    return 3;
+                }
+                AdvanceAndCheck(1);
+                parseState = PARSE_DEF;
+                break;
+            }
+
+            case PARSE_FLOAT_KEYWORD:
+            {
+                ConsumeWhitespace();
+                if (*inputWcs != L'(') {
+                    return 3;
+                }
+                AdvanceAndCheck(1);
+                parseState = PARSE_FLOAT_OPEN;
+                break;
+            }
+
+            case PARSE_FLOAT_OPEN:
+            {
+                ConsumeWhitespace();
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == ULONG_MAX) {
+                    return 3;
+                }
+                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
+                itemPtr->type = ITEM_FLOAT;
+                MkWstrSet(&itemPtr->name, inputWcs, j);
+                itemPtr->validateCallback.length = 0;
+                AdvanceAndCheck(j);
+                parseState = PARSE_FLOAT_NAME;
+                break;
+            }
+
+            case PARSE_FLOAT_NAME:
+            {
+                ConsumeWhitespace();
+                if (*inputWcs != L',') {
+                    return 3;
+                }
+                AdvanceAndCheck(1);
+                parseState = PARSE_FLOAT_SEP;
+                break;
+            }
+
+            case PARSE_FLOAT_SEP:
+            {
+                ConsumeWhitespace();
+                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == ULONG_MAX) {
+                    return 3;
+                }
+                MkWstrSet(&itemPtr->defaultValue, inputWcs, j);
+                AdvanceAndCheck(j);
+                parseState = PARSE_FLOAT_DEFAULT;
+                break;
+            }
+
+            case PARSE_FLOAT_DEFAULT:
             {
                 ConsumeWhitespace();
                 if (*inputWcs != L')') {
@@ -714,6 +786,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(fileBaseNameUpper);
         OutputWcs(L"_H\n");
 
+        OutputWcs(L"\n#include <math.h>");
         OutputWcs(L"\n#include <wchar.h>\n");
         OutputWstr(&includeLine);
 
@@ -758,6 +831,13 @@ int wmain(int argCount, wchar_t ** args) {
                     case ITEM_UINT:
                     {
                         OutputWcs(L"unsigned long ");
+                        OutputWstr(&itemPtr->name);
+                        break;
+                    }
+
+                    case ITEM_FLOAT:
+                    {
+                        OutputWcs(L"double ");
                         OutputWstr(&itemPtr->name);
                         break;
                     }
@@ -818,6 +898,10 @@ int wmain(int argCount, wchar_t ** args) {
 
                     case ITEM_UINT:
                         OutputWcs(L"unsigned long ");
+                        break;
+
+                    case ITEM_FLOAT:
+                        OutputWcs(L"double ");
                         break;
 
                     case ITEM_WSTR:
@@ -976,6 +1060,10 @@ int wmain(int argCount, wchar_t ** args) {
 
                     case ITEM_UINT:
                         OutputWcs(L"unsigned long ");
+                        break;
+
+                    case ITEM_FLOAT:
+                        OutputWcs(L"double ");
                         break;
 
                     case ITEM_WSTR:
@@ -1138,6 +1226,42 @@ int wmain(int argCount, wchar_t ** args) {
                         OutputWcs(L"\n                return false;");
                         OutputWcs(L"\n            }");
                         OutputWcs(L"\n            if (value == ULONG_MAX) {");
+                        OutputWcs(L"\n                *errorType = MKCONFGEN_LOAD_ERROR_VALUE_OVERFLOW;");
+                        OutputWcs(L"\n                return false;");
+                        OutputWcs(L"\n            }");
+
+                        if (itemPtr->validateCallback.length != 0) {
+                            OutputWcs(L"\n            if (!");
+                            OutputWstr(&itemPtr->validateCallback);
+                            OutputWcs(L"(value)) {");
+                            OutputWcs(L"\n                *errorType = MKCONFGEN_LOAD_ERROR_VALUE_INVALID;");
+                            OutputWcs(L"\n                return false;");
+                            OutputWcs(L"\n            }");
+                        }
+
+                        OutputWcs(L"\n            configPtr->");
+                        OutputWstr(&itemPtr->name);
+                        OutputWcs(L" = value;");
+
+                        OutputWcs(L"\n            return true;");
+                        OutputWcs(L"\n        }");
+                        break;
+                    }
+
+                    case ITEM_FLOAT:
+                    {
+                        OutputWcs(L"\n            if (isStr) {");
+                        OutputWcs(L"\n                *errorType = MKCONFGEN_LOAD_ERROR_VALUE_TYPE;");
+                        OutputWcs(L"\n                return false;");
+                        OutputWcs(L"\n            }");
+                        OutputWcs(L"\n            ");
+                        OutputWcs(L"\n            wchar_t * end;");
+                        OutputWcs(L"\n            double value = wcstod(rawValue, &end);");
+                        OutputWcs(L"\n            if (end != rawValue + rawValueLength) {");
+                        OutputWcs(L"\n                *errorType = MKCONFGEN_LOAD_ERROR_VALUE_TYPE;");
+                        OutputWcs(L"\n                return false;");
+                        OutputWcs(L"\n            }");
+                        OutputWcs(L"\n            if (value == HUGE_VAL || value == -HUGE_VAL) {");
                         OutputWcs(L"\n                *errorType = MKCONFGEN_LOAD_ERROR_VALUE_OVERFLOW;");
                         OutputWcs(L"\n                return false;");
                         OutputWcs(L"\n            }");

@@ -24,6 +24,7 @@
 
 #define MKCONFGEN_ITEM_INT(itemName, defaultValue) long itemName = defaultValue;
 #define MKCONFGEN_ITEM_UINT(itemName, defaultValue) unsigned long itemName = defaultValue;
+#define MKCONFGEN_ITEM_FLOAT(itemName, defaultValue) double itemName = defaultValue;
 #define MKCONFGEN_ITEM_WSTR(itemName, count, defaultValue) wchar_t itemName[count] = defaultValue;
 
 #define MKCONFGEN_VALIDATE(itemName, callback) validateResult = callback(itemName);
@@ -40,6 +41,7 @@
 
 #define MKCONFGEN_ITEM_INT(itemName, defaultValue)
 #define MKCONFGEN_ITEM_UINT(itemName, defaultValue)
+#define MKCONFGEN_ITEM_FLOAT(itemName, defaultValue)
 #define MKCONFGEN_ITEM_WSTR(itemName, count, defaultValue)
 
 #define MKCONFGEN_VALIDATE(itemName, callback)
