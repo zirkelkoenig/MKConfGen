@@ -279,5 +279,5 @@ bool _MkConfGenLoad(
         currentLine++;
     }
 
-    return memoryError;
+    return !memoryError;
 }

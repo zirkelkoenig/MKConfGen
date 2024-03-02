@@ -23,38 +23,53 @@ int ReadInputFile(wchar_t * filePath, MkList * inputListPtr) {
         filePath,
         GENERIC_READ,
         FILE_SHARE_READ,
-        NULL,
+        nullptr,
         OPEN_EXISTING,
         FILE_FLAG_SEQUENTIAL_SCAN,
-        NULL);
+        nullptr);
     if (file == INVALID_HANDLE_VALUE) {
         return 1;
     }
-    LARGE_INTEGER fileSizeStruct;
-    if (!GetFileSizeEx(file, &fileSizeStruct)) {
-        return 1;
-    }
 
-    byte * rawInput = (byte *)malloc(fileSizeStruct.QuadPart);
-    if (!rawInput) {
-        return 2;
-    }
+    auto readCallback = [](void * stream, void * buffer, ulong count, void * status) {
+        ulong * error = static_cast<ulong *>(status);
 
-    ulong bytesRead;
-    bool success = ReadFile(
-        file,
-        rawInput,
-        (ulong)fileSizeStruct.QuadPart,
-        &bytesRead,
-        nullptr);
-    if (!success) {
-        return 1;
-    }
-
-    CloseHandle(file);
+        ulong readCount;
+        if (ReadFile(stream, buffer, count, &readCount, nullptr)) {
+            *error = ERROR_SUCCESS;
+            if (readCount == 0) {
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            *error = GetLastError();
+            return false;
+        }
+    };
 
     MkListInit(inputListPtr, 16, sizeof(wchar_t));
-    success = MkReadUtf8Stream(rawInput, (ulong)fileSizeStruct.QuadPart, inputListPtr);
+
+    auto writeCallback = [](void * stream, const void * buffer, ulong count, void * status) {
+        MkList * list = (MkList *)stream;
+        const wchar_t * chars = (const wchar_t *)buffer;
+
+        wchar_t * newElems = (wchar_t *)MkListInsert(list, ULONG_MAX, count);
+        if (!newElems) {
+            return false;
+        }
+        for (ulong i = 0; i != count; i++) {
+            newElems[i] = chars[i];
+        }
+        return true;
+    };
+
+    ulong readStatus;
+    bool success = MkUtf8Read(
+        readCallback, file, &readStatus,
+        writeCallback, inputListPtr, nullptr);
+
+    CloseHandle(file);
     if (!success) {
         return 2;
     }
@@ -687,8 +702,8 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
     return 0;
 }
 
-#define OutputWcs(s) if (!MkWriteUtf8Stream(writeCallback, file, &status, (s), ULONG_MAX, true)) return 4
-#define OutputWstr(s) if (!MkWriteUtf8Stream(writeCallback, file, &status, (s)->wcs, (s)->length, true)) return 4
+#define OutputWcs(s) if (!MkUtf8WriteWcs((s), ULONG_MAX, true, writeCallback, file, nullptr)) return 4
+#define OutputWstr(s) if (!MkUtf8WriteWcs((s)->wcs, (s)->length, true, writeCallback, file, nullptr)) return 4
 
 // Errors:
 // 1 - file not readable
@@ -728,21 +743,9 @@ int wmain(int argCount, wchar_t ** args) {
         }
     }
 
-    auto writeCallback = [](void * stream, const byte * buffer, ulong count, void * status) {
+    auto writeCallback = [](void * stream, const void * buffer, ulong count, void * status) {
         ulong writeCount;
-        BOOL result = WriteFile(
-            (HANDLE)stream,
-            buffer,
-            count,
-            &writeCount,
-            nullptr);
-        if (result) {
-            return true;
-        } else {
-            ulong * errorPtr = (ulong *)status;
-            *errorPtr = GetLastError();
-            return false;
-        }
+        return (bool)WriteFile(stream, buffer, count, &writeCount, nullptr);
     };
 
     wchar_t headerFileName[MAX_PATH];
@@ -765,8 +768,6 @@ int wmain(int argCount, wchar_t ** args) {
         if (file == INVALID_HANDLE_VALUE) {
             return 4;
         }
-
-        ulong status;
 
         OutputWcs(L"//---------------------//\n");
         OutputWcs(L"// AUTO-GENERATED FILE //\n");
@@ -965,8 +966,6 @@ int wmain(int argCount, wchar_t ** args) {
         if (file == INVALID_HANDLE_VALUE) {
             return 4;
         }
-
-        ulong status;
 
         OutputWcs(L"//---------------------//\n");
         OutputWcs(L"// AUTO-GENERATED FILE //\n");
@@ -1377,8 +1376,6 @@ int wmain(int argCount, wchar_t ** args) {
         if (file == INVALID_HANDLE_VALUE) {
             return 4;
         }
-
-        ulong status;
 
         ulong headingIndex = 0;
         Heading * headingPtr;
