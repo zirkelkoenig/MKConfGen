@@ -2,9 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="Import\MkList.cpp">
-      <Filter>Import</Filter>
-    </ClCompile>
     <ClCompile Include="Import\MkString.cpp">
       <Filter>Import</Filter>
     </ClCompile>

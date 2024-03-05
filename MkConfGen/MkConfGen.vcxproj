@@ -127,7 +127,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Import\MkList.cpp" />
     <ClCompile Include="Import\MkString.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>

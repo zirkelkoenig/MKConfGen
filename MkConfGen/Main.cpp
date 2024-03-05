@@ -13,7 +13,7 @@ typedef unsigned long ulong;
 // 0 - ok
 // 1 - file not readable
 // 2 - out of memory
-int ReadInputFile(wchar_t * filePath, MkList * inputListPtr) {
+int ReadInputFile(wchar_t * filePath, MkList2<wchar_t> * inputListPtr) {
     size_t argLength = wcslen(filePath);
     if (argLength >= MAX_PATH) {
         return 1;
@@ -48,13 +48,11 @@ int ReadInputFile(wchar_t * filePath, MkList * inputListPtr) {
         }
     };
 
-    MkListInit(inputListPtr, 16, sizeof(wchar_t));
-
     auto writeCallback = [](void * stream, const void * buffer, ulong count, void * status) {
-        MkList * list = (MkList *)stream;
+        MkList2<wchar_t> * list = (MkList2<wchar_t> *)stream;
         const wchar_t * chars = (const wchar_t *)buffer;
 
-        wchar_t * newElems = (wchar_t *)MkListInsert(list, ULONG_MAX, count);
+        wchar_t * newElems = list->Insert(ULONG_MAX, count);
         if (!newElems) {
             return false;
         }
@@ -100,8 +98,8 @@ struct Item {
 
 struct Config {
     MkWstr name;
-    MkList headings;
-    MkList items;
+    MkList2<Heading> headings;
+    MkList2<Item> items;
 };
 
 enum ParseState {
@@ -170,8 +168,8 @@ const wchar_t sepChars[] = { L' ', L'\t', L'\n', L',' };
 
 // 0 - ok
 // 3 - syntax error
-int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr, MkWstr * inputHeadPtr) {
-    wchar_t * inputWcs = (wchar_t *)MkListGet(inputWcsListPtr, 0);
+int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWstr * includeLinePtr, MkWstr * inputHeadPtr) {
+    wchar_t * inputWcs = inputWcsListPtr->elems;
     wchar_t * inputWcsEnd = inputWcs + inputWcsListPtr->count;
 
     // Include Line
@@ -199,7 +197,6 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
 
     // Definitions
 
-    MkListInit(configsPtr, 4, sizeof(Config));
     Config * configPtr = NULL;
     Item * itemPtr = NULL;
 
@@ -237,9 +234,9 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                     AdvanceAndCheck(1);
                     parseState = PARSE_DEF_BEGIN_OPEN;
 
-                    configPtr = (Config *)MkListInsert(configsPtr, ULONG_MAX, 1);
-                    MkListInit(&configPtr->headings, 4, sizeof(Heading));
-                    MkListInit(&configPtr->items, 16, sizeof(Item));
+                    configPtr = configsPtr->Insert(ULONG_MAX, 1);
+                    configPtr->headings.Init(4);
+                    configPtr->items.Init(16);
                 } else {
                     return 3;
                 }
@@ -332,7 +329,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 if (j == ULONG_MAX) {
                     return 3;
                 }
-                Heading * headingPtr = (Heading *)MkListInsert(&configPtr->headings, ULONG_MAX, 1);
+                Heading * headingPtr = configPtr->headings.Insert(ULONG_MAX, 1);
                 headingPtr->index = configPtr->items.count;
                 MkWstrSet(&headingPtr->name, inputWcs, j);
                 AdvanceAndCheck(j);
@@ -369,7 +366,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
                 itemPtr->type = ITEM_INT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -431,7 +428,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
                 itemPtr->type = ITEM_UINT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -493,7 +490,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
                 itemPtr->type = ITEM_FLOAT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -555,7 +552,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 if (j == ULONG_MAX) {
                     return 3;
                 }
-                itemPtr = (Item *)MkListInsert(&configPtr->items, ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
                 itemPtr->type = ITEM_WSTR;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -675,7 +672,7 @@ int Parse(MkList * inputWcsListPtr, MkList * configsPtr, MkWstr * includeLinePtr
                 MkWstrSet(&validateCallback, inputWcs, j);
 
                 for (int k = 0; k != configPtr->items.count; k++) {
-                    Item * validateItemPtr = (Item *)MkListGet(&configPtr->items, k);
+                    Item * validateItemPtr = &configPtr->items.elems[k];
                     if (MkWstrsAreEqual(&validateItemPtr->name, &validateName)) {
                         validateItemPtr->validateCallback = validateCallback;
                     }
@@ -717,11 +714,11 @@ int wmain(int argCount, wchar_t ** args) {
 
     int rc;
 
-    MkList inputWcsList;
+    MkList2<wchar_t> inputWcsList(128);
     rc = ReadInputFile(args[1], &inputWcsList);
     if (rc != 0) return rc;
 
-    MkList configs;
+    MkList2<Config> configs(4);
     MkWstr includeLine;
     MkWstr inputHead;
     rc = Parse(&inputWcsList, &configs, &includeLine, &inputHead);
@@ -792,7 +789,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWstr(&includeLine);
 
         for (ulong i = 0; i != configs.count; i++) {
-            Config * configPtr = (Config *)MkListGet(&configs, i);
+            Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nstruct ");
             OutputWstr(&configPtr->name);
@@ -801,7 +798,7 @@ int wmain(int argCount, wchar_t ** args) {
             ulong headingIndex = 0;
             Heading * headingPtr;
             if (headingIndex != configPtr->headings.count) {
-                headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                headingPtr = &configPtr->headings.elems[headingIndex];
             } else {
                 headingPtr = NULL;
             }
@@ -812,13 +809,13 @@ int wmain(int argCount, wchar_t ** args) {
                     OutputWstr(&headingPtr->name);
 
                     if (++headingIndex != configPtr->headings.count) {
-                        headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                        headingPtr = &configPtr->headings.elems[headingIndex];
                     } else {
                         headingPtr = NULL;
                     }
                 }
 
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
                 OutputWcs(L"\n    ");
 
                 switch (itemPtr->type) {
@@ -864,7 +861,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n// Default Values");
 
         for (ulong i = 0; i != configs.count; i++) {
-            Config * configPtr = (Config *)MkListGet(&configs, i);
+            Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\n// ");
             OutputWstr(&configPtr->name);
@@ -872,7 +869,7 @@ int wmain(int argCount, wchar_t ** args) {
             Heading * headingPtr;
             ulong headingIndex = 0;
             if (headingIndex != configPtr->headings.count) {
-                headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                headingPtr = &configPtr->headings.elems[headingIndex];
             } else {
                 headingPtr = NULL;
             }
@@ -883,13 +880,13 @@ int wmain(int argCount, wchar_t ** args) {
                     OutputWstr(&headingPtr->name);
 
                     if (++headingIndex != configPtr->headings.count) {
-                        headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                        headingPtr = &configPtr->headings.elems[headingIndex];
                     } else {
                         headingPtr = NULL;
                     }
                 }
 
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
 
                 OutputWcs(L"\nextern const ");
                 switch (itemPtr->type) {
@@ -929,7 +926,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n// Functions");
 
         for (ulong i = 0; i != configs.count; i++) {
-            Config * configPtr = (Config *)MkListGet(&configs, i);
+            Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nvoid ");
             OutputWstr(&configPtr->name);
@@ -987,7 +984,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n// Keys");
 
         for (ulong i = 0; i != configs.count; i++) {
-            Config * configPtr = (Config *)MkListGet(&configs, i);
+            Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nconst unsigned long _mkConfGen");
             OutputWstr(&configPtr->name);
@@ -999,7 +996,7 @@ int wmain(int argCount, wchar_t ** args) {
                 swprintf_s(tmpBuffer, 32, L"\n    %zu,", currentKeyIndex);
                 OutputWcs(tmpBuffer);
 
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
                 currentKeyIndex += itemPtr->name.length;
             }
             swprintf_s(tmpBuffer, 32, L"\n    %zu,", currentKeyIndex);
@@ -1011,7 +1008,7 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWcs(L"Keys[] =");
 
             for (ulong j = 0; j != configPtr->items.count; j++) {
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
                 OutputWcs(L"\n    L\"");
                 OutputWstr(&itemPtr->name);
                 OutputWcs(L"\"");
@@ -1024,7 +1021,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n// Default Values");
 
         for (ulong i = 0; i != configs.count; i++) {
-            Config * configPtr = (Config *)MkListGet(&configs, i);
+            Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\n// ");
             OutputWstr(&configPtr->name);
@@ -1032,7 +1029,7 @@ int wmain(int argCount, wchar_t ** args) {
             Heading * headingPtr;
             ulong headingIndex = 0;
             if (headingIndex != configPtr->headings.count) {
-                headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                headingPtr = &configPtr->headings.elems[headingIndex];
             } else {
                 headingPtr = NULL;
             }
@@ -1043,13 +1040,13 @@ int wmain(int argCount, wchar_t ** args) {
                     OutputWstr(&headingPtr->name);
 
                     if (++headingIndex != configPtr->headings.count) {
-                        headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                        headingPtr = &configPtr->headings.elems[headingIndex];
                     } else {
                         headingPtr = NULL;
                     }
                 }
 
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
 
                 OutputWcs(L"\nconst ");
                 switch (itemPtr->type) {
@@ -1093,7 +1090,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n// Functions");
 
         for (ulong i = 0; i != configs.count; i++) {
-            Config * configPtr = (Config *)MkListGet(&configs, i);
+            Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nvoid ");
             OutputWstr(&configPtr->name);
@@ -1105,7 +1102,7 @@ int wmain(int argCount, wchar_t ** args) {
             ulong headingIndex = 0;
             Heading * headingPtr;
             if (headingIndex != configPtr->headings.count) {
-                headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                headingPtr = &configPtr->headings.elems[headingIndex];
             } else {
                 headingPtr = NULL;
             }
@@ -1116,13 +1113,13 @@ int wmain(int argCount, wchar_t ** args) {
                     OutputWstr(&headingPtr->name);
 
                     if (++headingIndex != configPtr->headings.count) {
-                        headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                        headingPtr = &configPtr->headings.elems[headingIndex];
                     } else {
                         headingPtr = NULL;
                     }
                 }
 
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
 
                 if (itemPtr->type == ITEM_WSTR) {
                     OutputWcs(L"\n    wcscpy_s(configPtr->");
@@ -1167,7 +1164,7 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWcs(L"\n    switch (index) {");
 
             for (ulong j = 0; j != configPtr->items.count; j++) {
-                Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+                Item * itemPtr = &configPtr->items.elems[j];
 
                 wchar_t tmpBuffer[64];
                 swprintf_s(tmpBuffer, 64, L"\n\n        case %lu:", j);
@@ -1358,7 +1355,7 @@ int wmain(int argCount, wchar_t ** args) {
     }
 
     for (ulong i = 0; i != configs.count; i++) {
-        Config * configPtr = (Config *)MkListGet(&configs, i);
+        Config * configPtr = &configs.elems[i];
 
         wchar_t filePath[MAX_PATH];
         wcsncpy_s(filePath, MAX_PATH, args[1], fileName - args[1]);
@@ -1380,13 +1377,13 @@ int wmain(int argCount, wchar_t ** args) {
         ulong headingIndex = 0;
         Heading * headingPtr;
         if (headingIndex != configPtr->headings.count) {
-            headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+            headingPtr = &configPtr->headings.elems[headingIndex];
             if (headingPtr->index == 0) {
                 OutputWcs(L"# ");
                 OutputWstr(&headingPtr->name);
 
                 if (++headingIndex != configPtr->headings.count) {
-                    headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                    headingPtr = &configPtr->headings.elems[headingIndex];
                 } else {
                     headingPtr = NULL;
                 }
@@ -1401,13 +1398,13 @@ int wmain(int argCount, wchar_t ** args) {
                 OutputWstr(&headingPtr->name);
 
                 if (++headingIndex != configPtr->headings.count) {
-                    headingPtr = (Heading *)MkListGet(&configPtr->headings, headingIndex);
+                    headingPtr = &configPtr->headings.elems[headingIndex];
                 } else {
                     headingPtr = NULL;
                 }
             }
 
-            Item * itemPtr = (Item *)MkListGet(&configPtr->items, j);
+            Item * itemPtr = &configPtr->items.elems[j];
             OutputWcs(L"\n");
             OutputWstr(&itemPtr->name);
             OutputWcs(L" = ");
