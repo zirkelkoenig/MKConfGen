@@ -28,14 +28,14 @@ SOFTWARE.
 
 bool _MkConfGenLoad(
     const wchar_t * configWcs,
-    unsigned long configLength,
-    unsigned long keyCount,
-    const unsigned long * keyIndices,
+    size_t configLength,
+    size_t keyCount,
+    const size_t * keyIndices,
     const wchar_t * keys,
     _MkConfGenParseValueCallback parseValueCallback,
     void * config,
     MkConfGenLoadError ** errors,
-    unsigned long * errorCount)
+    size_t * errorCount)
 {
     _MKCONFGEN_ASSERT(configWcs || configLength == 0);
     _MKCONFGEN_ASSERT(keyIndices);
@@ -49,16 +49,16 @@ bool _MkConfGenLoad(
     *errors = NULL;
     bool memoryError = false;
 
-    unsigned long currentLine = 0;
+    size_t currentLine = 0;
     bool skipLine;
 
     wchar_t currentKey[MK_CONF_MAX_KEY_COUNT];
-    unsigned long currentKeyLength;
+    size_t currentKeyLength;
     wchar_t currentRawValue[MK_CONF_MAX_VALUE_COUNT];
-    unsigned long currentRawValueLength;
+    size_t currentRawValueLength;
     bool valueIsStr;
 
-    unsigned long i = 0;
+    size_t i = 0;
 
     auto SkipLine = [&configWcs, &configLength, &i]() {
         while (configWcs[i] != L'\n') {
@@ -73,7 +73,7 @@ bool _MkConfGenLoad(
 
     auto AddError = [&errors, &errorCount, &currentLine, &memoryError](MkConfGenLoadErrorType type) {
         if ((*errorCount) % _MKCONFGEN_ERRORS_GROW_COUNT == 0) {
-            unsigned long allocCount = *errorCount + _MKCONFGEN_ERRORS_GROW_COUNT;
+            size_t allocCount = *errorCount + _MKCONFGEN_ERRORS_GROW_COUNT;
             MkConfGenLoadError * newErrors = (MkConfGenLoadError *)realloc(*errors, allocCount * sizeof(MkConfGenLoadError));
             if (!newErrors) {
                 memoryError = true;
@@ -259,10 +259,10 @@ bool _MkConfGenLoad(
         currentKey[currentKeyLength] = L'\0';
         currentRawValue[currentRawValueLength] = L'\0';
 
-        unsigned long j;
+        size_t j;
         for (j = 0; j != keyCount; j++) {
-            unsigned long index = keyIndices[j];
-            unsigned long length = (unsigned long)(keyIndices[j + 1] - index);
+            size_t index = keyIndices[j];
+            size_t length = keyIndices[j + 1] - index;
             if (wcsncmp(currentKey, keys + index, length) == 0) {
                 break;
             }

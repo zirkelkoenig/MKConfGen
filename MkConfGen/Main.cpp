@@ -6,14 +6,10 @@
 #include "Import/MkList.h"
 #include "Import/MkString.h"
 
-typedef unsigned char byte;
-typedef unsigned short ushort;
-typedef unsigned long ulong;
-
 // 0 - ok
 // 1 - file not readable
 // 2 - out of memory
-int ReadInputFile(wchar_t * filePath, MkList2<wchar_t> * inputListPtr) {
+int ReadInputFile(wchar_t * filePath, MkList<wchar_t> * inputListPtr) {
     size_t argLength = wcslen(filePath);
     if (argLength >= MAX_PATH) {
         return 1;
@@ -49,10 +45,10 @@ int ReadInputFile(wchar_t * filePath, MkList2<wchar_t> * inputListPtr) {
     };
 
     auto writeCallback = [](void * stream, const void * buffer, ulong count, void * status) {
-        MkList2<wchar_t> * list = (MkList2<wchar_t> *)stream;
+        MkList<wchar_t> * list = (MkList<wchar_t> *)stream;
         const wchar_t * chars = (const wchar_t *)buffer;
 
-        wchar_t * newElems = list->Insert(ULONG_MAX, count);
+        wchar_t * newElems = list->Insert(SIZE_MAX, count);
         if (!newElems) {
             return false;
         }
@@ -98,8 +94,8 @@ struct Item {
 
 struct Config {
     MkWstr name;
-    MkList2<Heading> headings;
-    MkList2<Item> items;
+    MkList<Heading> headings;
+    MkList<Item> items;
 };
 
 enum ParseState {
@@ -164,29 +160,28 @@ const wchar_t sepChars[] = { L' ', L'\t', L'\n', L',' };
 #define CheckTruncation() if (inputWcs >= inputWcsEnd) return 3
 #define AdvanceAndCheck(n) inputWcs += (n); CheckTruncation()
 #define WcsLengthR(s) ((sizeof s / sizeof(wchar_t)) - 1)
-#define inputWcsLength (ulong)(inputWcsEnd - inputWcs)
+#define inputWcsLength (inputWcsEnd - inputWcs)
 
 // 0 - ok
 // 3 - syntax error
-int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWstr * includeLinePtr, MkWstr * inputHeadPtr) {
+int Parse(MkList<wchar_t> * inputWcsListPtr, MkList<Config> * configsPtr, MkWstr * includeLinePtr, MkWstr * inputHeadPtr) {
     wchar_t * inputWcs = inputWcsListPtr->elems;
     wchar_t * inputWcsEnd = inputWcs + inputWcsListPtr->count;
 
     // Include Line
 
     includeLinePtr->wcs = inputWcs;
-    inputHeadPtr->wcs = MkWcsFindChar(inputWcs, inputWcsLength, L'\n');
-    if (!inputHeadPtr->wcs) {
+    includeLinePtr->length = MkWcsFindCharIndex(inputWcs, inputWcsLength, L'\n');
+    if (includeLinePtr->length == SIZE_MAX) {
         return 3;
     }
-    inputWcs = inputHeadPtr->wcs + 1;
-    CheckTruncation();
-    includeLinePtr->length = (ulong)(inputWcs - includeLinePtr->wcs);
+    AdvanceAndCheck(includeLinePtr->length + 1);
 
     // User Code
 
-    inputHeadPtr->length = MkWcsFindSubstringIndex(inputWcs, inputWcsLength, fullTokenFileBegin);
-    if (inputHeadPtr->length == ULONG_MAX) {
+    inputHeadPtr->wcs = inputWcs;
+    inputHeadPtr->length = MkWcsFindSubstrIndex(inputWcs, inputWcsLength, fullTokenFileBegin);
+    if (inputHeadPtr->length == SIZE_MAX) {
         return 3;
     }
     AdvanceAndCheck(inputHeadPtr->length + WcsLengthR(fullTokenFileBegin));
@@ -234,7 +229,7 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
                     AdvanceAndCheck(1);
                     parseState = PARSE_DEF_BEGIN_OPEN;
 
-                    configPtr = configsPtr->Insert(ULONG_MAX, 1);
+                    configPtr = configsPtr->Insert(SIZE_MAX, 1);
                     configPtr->headings.Init(4);
                     configPtr->items.Init(16);
                 } else {
@@ -246,8 +241,8 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_DEF_BEGIN_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&configPtr->name, inputWcs, j);
@@ -325,11 +320,11 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_HEADING_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
-                Heading * headingPtr = configPtr->headings.Insert(ULONG_MAX, 1);
+                Heading * headingPtr = configPtr->headings.Insert(SIZE_MAX, 1);
                 headingPtr->index = configPtr->items.count;
                 MkWstrSet(&headingPtr->name, inputWcs, j);
                 AdvanceAndCheck(j);
@@ -362,11 +357,11 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_INT_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
-                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(SIZE_MAX, 1);
                 itemPtr->type = ITEM_INT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -389,8 +384,8 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_INT_SEP:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->defaultValue, inputWcs, j);
@@ -424,11 +419,11 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_UINT_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
-                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(SIZE_MAX, 1);
                 itemPtr->type = ITEM_UINT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -451,8 +446,8 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_UINT_SEP:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->defaultValue, inputWcs, j);
@@ -486,11 +481,11 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_FLOAT_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
-                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(SIZE_MAX, 1);
                 itemPtr->type = ITEM_FLOAT;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -513,8 +508,8 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_FLOAT_SEP:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->defaultValue, inputWcs, j);
@@ -548,11 +543,11 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_WSTR_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
-                itemPtr = configPtr->items.Insert(ULONG_MAX, 1);
+                itemPtr = configPtr->items.Insert(SIZE_MAX, 1);
                 itemPtr->type = ITEM_WSTR;
                 MkWstrSet(&itemPtr->name, inputWcs, j);
                 itemPtr->validateCallback.length = 0;
@@ -575,8 +570,8 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_WSTR_NAME_SEP:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&itemPtr->length, inputWcs, j);
@@ -605,7 +600,7 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
                 }
                 AdvanceAndCheck(2);
 
-                ulong j = 0;
+                size_t j = 0;
                 while (!(inputWcs[j] == L'\"' && (j == 0 || inputWcs[j - 1] != L'\\'))) {
                     j++;
                 }
@@ -641,8 +636,8 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_VALIDATE_OPEN:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, sepChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&validateName, inputWcs, j);
@@ -665,15 +660,15 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
             case PARSE_VALIDATE_SEP:
             {
                 ConsumeWhitespace();
-                ulong j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
-                if (j == ULONG_MAX) {
+                size_t j = MkWcsFindCharsIndex(inputWcs, inputWcsLength, closeChars, 4);
+                if (j == SIZE_MAX) {
                     return 3;
                 }
                 MkWstrSet(&validateCallback, inputWcs, j);
 
                 for (int k = 0; k != configPtr->items.count; k++) {
                     Item * validateItemPtr = &configPtr->items.elems[k];
-                    if (MkWstrsAreEqual(&validateItemPtr->name, &validateName)) {
+                    if (MkWcsAreEqual(validateItemPtr->name.wcs, validateItemPtr->name.length, validateName.wcs, validateName.length)) {
                         validateItemPtr->validateCallback = validateCallback;
                     }
                 }
@@ -699,7 +694,7 @@ int Parse(MkList2<wchar_t> * inputWcsListPtr, MkList2<Config> * configsPtr, MkWs
     return 0;
 }
 
-#define OutputWcs(s) if (!MkUtf8WriteWcs((s), ULONG_MAX, true, writeCallback, file, nullptr)) return 4
+#define OutputWcs(s) if (!MkUtf8WriteWcs((s), SIZE_MAX, true, writeCallback, file, nullptr)) return 4
 #define OutputWstr(s) if (!MkUtf8WriteWcs((s)->wcs, (s)->length, true, writeCallback, file, nullptr)) return 4
 
 // Errors:
@@ -714,11 +709,13 @@ int wmain(int argCount, wchar_t ** args) {
 
     int rc;
 
-    MkList2<wchar_t> inputWcsList(128);
+    MkList<wchar_t> inputWcsList;
+    inputWcsList.Init(128);
     rc = ReadInputFile(args[1], &inputWcsList);
     if (rc != 0) return rc;
 
-    MkList2<Config> configs(4);
+    MkList<Config> configs;
+    configs.Init(4);
     MkWstr includeLine;
     MkWstr inputHead;
     rc = Parse(&inputWcsList, &configs, &includeLine, &inputHead);
@@ -771,7 +768,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"//---------------------//\n\n");
 
         wchar_t fileBaseNameUpper[MAX_PATH];
-        for (ulong i = 0; i != fileBaseNameLength; i++) {
+        for (size_t i = 0; i != fileBaseNameLength; i++) {
             fileBaseNameUpper[i] = towupper(fileName[i]);
         }
         fileBaseNameUpper[fileBaseNameLength] = L'\0';
@@ -785,17 +782,18 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"_H\n");
 
         OutputWcs(L"\n#include <math.h>");
+        OutputWcs(L"\n#include <stddef.h>");
         OutputWcs(L"\n#include <wchar.h>\n");
         OutputWstr(&includeLine);
 
-        for (ulong i = 0; i != configs.count; i++) {
+        for (size_t i = 0; i != configs.count; i++) {
             Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nstruct ");
             OutputWstr(&configPtr->name);
             OutputWcs(L" {");
 
-            ulong headingIndex = 0;
+            size_t headingIndex = 0;
             Heading * headingPtr;
             if (headingIndex != configPtr->headings.count) {
                 headingPtr = &configPtr->headings.elems[headingIndex];
@@ -803,7 +801,7 @@ int wmain(int argCount, wchar_t ** args) {
                 headingPtr = NULL;
             }
 
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n    // ");
                     OutputWstr(&headingPtr->name);
@@ -860,21 +858,21 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//---------------");
         OutputWcs(L"\n// Default Values");
 
-        for (ulong i = 0; i != configs.count; i++) {
+        for (size_t i = 0; i != configs.count; i++) {
             Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\n// ");
             OutputWstr(&configPtr->name);
 
             Heading * headingPtr;
-            ulong headingIndex = 0;
+            size_t headingIndex = 0;
             if (headingIndex != configPtr->headings.count) {
                 headingPtr = &configPtr->headings.elems[headingIndex];
             } else {
                 headingPtr = NULL;
             }
 
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n// ");
                     OutputWstr(&headingPtr->name);
@@ -925,7 +923,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//----------");
         OutputWcs(L"\n// Functions");
 
-        for (ulong i = 0; i != configs.count; i++) {
+        for (size_t i = 0; i != configs.count; i++) {
             Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nvoid ");
@@ -938,7 +936,7 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWstr(&configPtr->name);
             OutputWcs(L"Load(");
             OutputWstr(&configPtr->name);
-            OutputWcs(L" * configPtr, const wchar_t * configWcs, unsigned long configLength, MkConfGenLoadError ** errors, unsigned long * errorCount);");
+            OutputWcs(L" * configPtr, const wchar_t * configWcs, size_t configLength, MkConfGenLoadError ** errors, size_t * errorCount);");
         }
 
         OutputWcs(L"\n\n#endif");
@@ -983,16 +981,16 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//-----");
         OutputWcs(L"\n// Keys");
 
-        for (ulong i = 0; i != configs.count; i++) {
+        for (size_t i = 0; i != configs.count; i++) {
             Config * configPtr = &configs.elems[i];
 
-            OutputWcs(L"\n\nconst unsigned long _mkConfGen");
+            OutputWcs(L"\n\nconst size_t _mkConfGen");
             OutputWstr(&configPtr->name);
             OutputWcs(L"Indices[] = {");
 
             size_t currentKeyIndex = 0;
             wchar_t tmpBuffer[32];
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 swprintf_s(tmpBuffer, 32, L"\n    %zu,", currentKeyIndex);
                 OutputWcs(tmpBuffer);
 
@@ -1007,7 +1005,7 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWstr(&configPtr->name);
             OutputWcs(L"Keys[] =");
 
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 Item * itemPtr = &configPtr->items.elems[j];
                 OutputWcs(L"\n    L\"");
                 OutputWstr(&itemPtr->name);
@@ -1020,21 +1018,21 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//---------------");
         OutputWcs(L"\n// Default Values");
 
-        for (ulong i = 0; i != configs.count; i++) {
+        for (size_t i = 0; i != configs.count; i++) {
             Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\n// ");
             OutputWstr(&configPtr->name);
 
             Heading * headingPtr;
-            ulong headingIndex = 0;
+            size_t headingIndex = 0;
             if (headingIndex != configPtr->headings.count) {
                 headingPtr = &configPtr->headings.elems[headingIndex];
             } else {
                 headingPtr = NULL;
             }
 
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n// ");
                     OutputWstr(&headingPtr->name);
@@ -1089,7 +1087,7 @@ int wmain(int argCount, wchar_t ** args) {
         OutputWcs(L"\n//----------");
         OutputWcs(L"\n// Functions");
 
-        for (ulong i = 0; i != configs.count; i++) {
+        for (size_t i = 0; i != configs.count; i++) {
             Config * configPtr = &configs.elems[i];
 
             OutputWcs(L"\n\nvoid ");
@@ -1099,7 +1097,7 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWcs(L" * configPtr) {");
             OutputWcs(L"\n    _MKCONFGEN_ASSERT(configPtr);");
 
-            ulong headingIndex = 0;
+            size_t headingIndex = 0;
             Heading * headingPtr;
             if (headingIndex != configPtr->headings.count) {
                 headingPtr = &configPtr->headings.elems[headingIndex];
@@ -1107,7 +1105,7 @@ int wmain(int argCount, wchar_t ** args) {
                 headingPtr = NULL;
             }
 
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 if (headingPtr != NULL && j == headingPtr->index) {
                     OutputWcs(L"\n\n    // ");
                     OutputWstr(&headingPtr->name);
@@ -1148,9 +1146,9 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWstr(&configPtr->name);
             OutputWcs(L"ParseValue(");
             OutputWcs(L"\n    void * config,");
-            OutputWcs(L"\n    unsigned long index,");
+            OutputWcs(L"\n    size_t index,");
             OutputWcs(L"\n    wchar_t * rawValue,");
-            OutputWcs(L"\n    unsigned long rawValueLength,");
+            OutputWcs(L"\n    size_t rawValueLength,");
             OutputWcs(L"\n    bool isStr,");
             OutputWcs(L"\n    MkConfGenLoadErrorType * errorType)");
             OutputWcs(L"\n{");
@@ -1163,11 +1161,11 @@ int wmain(int argCount, wchar_t ** args) {
 
             OutputWcs(L"\n    switch (index) {");
 
-            for (ulong j = 0; j != configPtr->items.count; j++) {
+            for (size_t j = 0; j != configPtr->items.count; j++) {
                 Item * itemPtr = &configPtr->items.elems[j];
 
                 wchar_t tmpBuffer[64];
-                swprintf_s(tmpBuffer, 64, L"\n\n        case %lu:", j);
+                swprintf_s(tmpBuffer, 64, L"\n\n        case %zu:", j);
                 OutputWcs(tmpBuffer);
                 OutputWcs(L"\n        {");
 
@@ -1322,13 +1320,13 @@ int wmain(int argCount, wchar_t ** args) {
             OutputWstr(&configPtr->name);
             OutputWcs(L"Load(");
             OutputWstr(&configPtr->name);
-            OutputWcs(L" * configPtr, const wchar_t * configWcs, unsigned long configLength, MkConfGenLoadError ** errors, unsigned long * errorCount) {");
+            OutputWcs(L" * configPtr, const wchar_t * configWcs, size_t configLength, MkConfGenLoadError ** errors, size_t * errorCount) {");
             OutputWcs(L"\n    return _MkConfGenLoad(");
             OutputWcs(L"\n        configWcs,");
             OutputWcs(L"\n        configLength,");
 
             wchar_t tmpBuffer[32];
-            swprintf_s(tmpBuffer, 32, L"\n        %lu,", configPtr->items.count);
+            swprintf_s(tmpBuffer, 32, L"\n        %zu,", configPtr->items.count);
             OutputWcs(tmpBuffer);
 
             OutputWcs(L"\n        _mkConfGen");
@@ -1354,7 +1352,7 @@ int wmain(int argCount, wchar_t ** args) {
         CloseHandle(file);
     }
 
-    for (ulong i = 0; i != configs.count; i++) {
+    for (size_t i = 0; i != configs.count; i++) {
         Config * configPtr = &configs.elems[i];
 
         wchar_t filePath[MAX_PATH];
@@ -1374,7 +1372,7 @@ int wmain(int argCount, wchar_t ** args) {
             return 4;
         }
 
-        ulong headingIndex = 0;
+        size_t headingIndex = 0;
         Heading * headingPtr;
         if (headingIndex != configPtr->headings.count) {
             headingPtr = &configPtr->headings.elems[headingIndex];
@@ -1392,7 +1390,7 @@ int wmain(int argCount, wchar_t ** args) {
             headingPtr = NULL;
         }
 
-        for (ulong j = 0; j != configPtr->items.count; j++) {
+        for (size_t j = 0; j != configPtr->items.count; j++) {
             if (headingPtr != NULL && headingPtr->index == j) {
                 OutputWcs(L"\n\n# ");
                 OutputWstr(&headingPtr->name);

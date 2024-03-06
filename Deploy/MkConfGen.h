@@ -89,26 +89,26 @@ typedef enum MkConfGenLoadErrorType {
 
 typedef struct MkConfGenLoadError {
     MkConfGenLoadErrorType type;
-    unsigned long line;
+    size_t line;
 } MkConfGenLoadError;
 
 typedef bool (*_MkConfGenParseValueCallback)(
     void * config,
-    unsigned long index,
+    size_t index,
     wchar_t * rawValue,
-    unsigned long rawValueLength,
+    size_t rawValueLength,
     bool isStr,
     MkConfGenLoadErrorType * errorType);
 
 bool _MkConfGenLoad(
     const wchar_t * configWcs,
-    unsigned long configLength,
-    unsigned long keyCount,
-    const unsigned long * keyIndices,
+    size_t configLength,
+    size_t keyCount,
+    const size_t * keyIndices,
     const wchar_t * keys,
     _MkConfGenParseValueCallback parseValueCallback,
     void * config,
     MkConfGenLoadError ** errors,
-    unsigned long * errorCount);
+    size_t * errorCount);
 
 #endif
