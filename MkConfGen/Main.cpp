@@ -3,13 +3,13 @@
 #include <assert.h>
 #include <wchar.h>
 
-#include "Import/MkList.h"
+#include "Import/MkDynArray.h"
 #include "Import/MkString.h"
 
 // 0 - ok
 // 1 - file not readable
 // 2 - out of memory
-int ReadInputFile(wchar_t * filePath, MkList<wchar_t> * inputListPtr) {
+int ReadInputFile(wchar_t * filePath, MkDynArray<wchar_t> * inputListPtr) {
     size_t argLength = wcslen(filePath);
     if (argLength >= MAX_PATH) {
         return 1;
@@ -45,7 +45,7 @@ int ReadInputFile(wchar_t * filePath, MkList<wchar_t> * inputListPtr) {
     };
 
     auto writeCallback = [](void * stream, const void * buffer, ulong count, void * status) {
-        MkList<wchar_t> * list = (MkList<wchar_t> *)stream;
+        MkDynArray<wchar_t> * list = (MkDynArray<wchar_t> *)stream;
         const wchar_t * chars = (const wchar_t *)buffer;
 
         wchar_t * newElems = list->Insert(SIZE_MAX, count);
@@ -94,8 +94,8 @@ struct Item {
 
 struct Config {
     MkWstr name;
-    MkList<Heading> headings;
-    MkList<Item> items;
+    MkDynArray<Heading> headings;
+    MkDynArray<Item> items;
 };
 
 enum ParseState {
@@ -164,7 +164,7 @@ const wchar_t sepChars[] = { L' ', L'\t', L'\n', L',' };
 
 // 0 - ok
 // 3 - syntax error
-int Parse(MkList<wchar_t> * inputWcsListPtr, MkList<Config> * configsPtr, MkWstr * includeLinePtr, MkWstr * inputHeadPtr) {
+int Parse(MkDynArray<wchar_t> * inputWcsListPtr, MkDynArray<Config> * configsPtr, MkWstr * includeLinePtr, MkWstr * inputHeadPtr) {
     wchar_t * inputWcs = inputWcsListPtr->elems;
     wchar_t * inputWcsEnd = inputWcs + inputWcsListPtr->count;
 
@@ -709,12 +709,12 @@ int wmain(int argCount, wchar_t ** args) {
 
     int rc;
 
-    MkList<wchar_t> inputWcsList;
+    MkDynArray<wchar_t> inputWcsList;
     inputWcsList.Init(128);
     rc = ReadInputFile(args[1], &inputWcsList);
     if (rc != 0) return rc;
 
-    MkList<Config> configs;
+    MkDynArray<Config> configs;
     configs.Init(4);
     MkWstr includeLine;
     MkWstr inputHead;

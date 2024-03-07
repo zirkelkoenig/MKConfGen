@@ -7,10 +7,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Import\MkList.h">
+    <ClInclude Include="Import\MkString.h">
       <Filter>Import</Filter>
     </ClInclude>
-    <ClInclude Include="Import\MkString.h">
+    <ClInclude Include="Import\MkDynArray.h">
       <Filter>Import</Filter>
     </ClInclude>
   </ItemGroup>
